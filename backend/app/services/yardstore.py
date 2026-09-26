@@ -16,19 +16,62 @@ class YardstoreService:
     def list_entries(
         self,
         *,
-        keyword: str | None = None,
+        order_no: str | None = None,
+        container_no: str | None = None,
         status: str | None = None,
         page: int = 1,
         size: int = 20,
-    ) -> tuple[list[dict[str, Any]], int]:
+    ) -> tuple[list[dict[str, Any]], int, str | None]:
         rows = store.rows(MODULE)
-        if keyword:
-            rows = [row for row in rows if keyword in str(row.get("堆存单号", ""))]
+        order_no = (order_no or "").strip()
+        container_no = (container_no or "").strip()
+        if order_no:
+            rows = [row for row in rows if order_no.casefold() in str(row.get("堆存单号", "")).casefold()]
+        if container_no:
+            rows = [row for row in rows if container_no.casefold() in str(row.get("关联箱号", "")).casefold()]
         if status:
             rows = [row for row in rows if row.get("status") == status]
         total = len(rows)
+        notice = None
+        if total == 0:
+            notice = self._empty_notice(order_no=order_no, container_no=container_no)
         start = max(page - 1, 0) * size
-        return rows[start:start + size], total
+        return rows[start:start + size], total, notice
+
+    def _empty_notice(self, *, order_no: str, container_no: str) -> str:
+        all_rows = store.rows(MODULE)
+        scope_total = len(all_rows)
+
+        def matches(field: str, keyword: str) -> bool:
+            return any(keyword.casefold() in str(row.get(field, "")).casefold() for row in all_rows)
+
+        order_known = bool(order_no) and matches("堆存单号", order_no)
+        container_known = bool(container_no) and matches("关联箱号", container_no)
+        if order_no and container_no:
+            if not order_known and not container_known:
+                return (
+                    f"当前列表共 {scope_total} 条堆存单，堆存单号「{order_no}」与关联箱号"
+                    f"「{container_no}」都查不到记录，请核对后重试"
+                )
+            if not order_known:
+                return f"当前列表共 {scope_total} 条堆存单，查无堆存单号包含「{order_no}」的记录，请确认单号是否填写正确"
+            if not container_known:
+                return f"当前列表共 {scope_total} 条堆存单，查无关联箱号包含「{container_no}」的记录，请确认箱号是否填写正确"
+            return (
+                f"当前列表共 {scope_total} 条堆存单，堆存单号「{order_no}」与关联箱号「{container_no}」"
+                "各自都有记录，但不在同一张堆存单上（两个条件为叠加过滤）"
+            )
+        if order_no:
+            return (
+                f"当前列表共 {scope_total} 条堆存单，查无堆存单号包含「{order_no}」的记录，"
+                "请确认单号是否填写正确"
+            )
+        if container_no:
+            return (
+                f"当前列表共 {scope_total} 条堆存单，查无关联箱号包含「{container_no}」的记录，"
+                "请确认箱号是否填写正确"
+            )
+        return "当前列表没有符合条件的堆存单"
 
     def get_entry(self, entry_id: int) -> dict[str, Any] | None:
         return store.find(MODULE, entry_id)
