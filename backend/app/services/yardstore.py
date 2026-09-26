@@ -17,13 +17,23 @@ class YardstoreService:
         self,
         *,
         keyword: str | None = None,
+        container: str | None = None,
+        block: str | None = None,
         status: str | None = None,
         page: int = 1,
         size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
         rows = store.rows(MODULE)
-        if keyword:
-            rows = [row for row in rows if keyword in str(row.get("堆存单号", ""))]
+        # 堆存单号、关联箱号、箱区编号可叠加过滤，条件之间为“且”的关系
+        filters = (
+            ("堆存单号", keyword),
+            ("关联箱号", container),
+            ("箱区编号", block),
+        )
+        for field, value in filters:
+            needle = str(value or "").strip()
+            if needle:
+                rows = [row for row in rows if needle in str(row.get(field, ""))]
         if status:
             rows = [row for row in rows if row.get("status") == status]
         total = len(rows)

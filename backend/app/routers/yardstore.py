@@ -19,14 +19,18 @@ STATUSES = ["待进场", "堆存中", "待提离", "已提离"]
 @router.get("", response_model=PageResult[dict])
 def list_entries(
     keyword: str | None = Query(default=None, description="按堆存单号检索"),
+    container: str | None = Query(default=None, description="按关联箱号检索"),
+    block: str | None = Query(default=None, description="按箱区编号检索"),
     status: str | None = Query(default=None, description="待进场、堆存中、待提离、已提离"),
     page: int = 1,
     size: int = 20,
 ) -> PageResult[dict]:
-    """按堆存单号与状态过滤堆存记录列表；没有数据时返回空页，不报错。"""
+    """按堆存单号、关联箱号、箱区编号与状态叠加过滤堆存记录列表；没有数据时返回空页，不报错。"""
     if size > 200:
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
-    items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
+    items, total = service.list_entries(
+        keyword=keyword, container=container, block=block, status=status, page=page, size=size
+    )
     return PageResult(items=items, total=total, page=page, size=size)
 
 
